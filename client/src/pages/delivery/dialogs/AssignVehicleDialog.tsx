@@ -22,7 +22,8 @@ const assignmentSchema = z.object({
   driver_id: z.string().min(1, 'Vui lòng chọn tài xế'),
   loader_name: z.string().optional().nullable(),
   unit_price: z.coerce.number().min(0).optional().default(0),
-  quantity: z.coerce.number().min(0.01, 'SL phải > 0'),
+  /** SL giao thêm (incremental); khi lưu sẽ cộng với SL đã gán cho xe. */
+  quantity: z.coerce.number().min(0, 'SL không được âm'),
   expected_amount: z.coerce.number().min(0).optional().default(0),
   /** Ảnh gắn với xe dòng này (phiếu thu / chứng từ theo xe); khi lưu gộp vào image_urls đơn. */
   image_urls: z.array(z.string()).default([]),
@@ -144,6 +145,9 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
     name: 'assignments',
   });
 
+  /** SL đã lưu cho từng dòng xe khi mở form; cột «SL giao thêm» = nhập phần nốt. */
+  const [assignmentBaselines, setAssignmentBaselines] = useState<number[]>([]);
+
   const watchAssignments = watch('assignments') || [];
   const watchImageUrls = watch('image_urls') || [];
   const allMergedImageUrls = React.useMemo(
@@ -151,9 +155,21 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
     [watchImageUrls, watchAssignments],
   );
   const watchExportPaymentStatus = watch('export_payment_status');
-  const totalAssignedQuantity = watchAssignments.reduce((acc, curr) => acc + (Number(curr.quantity) || 0), 0);
-  const persistedAssignedQuantity = (order?.delivery_vehicles || []).reduce((acc: number, dv: any) => acc + (Number(dv.assigned_quantity) || 0), 0);
-  const currentAvailable = order ? Math.max(0, order.total_quantity - persistedAssignedQuantity) : 0;
+  const projectedAssignedTotal = React.useMemo(
+    () =>
+      watchAssignments.reduce((acc, row, i) => {
+        const b = assignmentBaselines[i] ?? 0;
+        const d = Number(row.quantity) || 0;
+        return acc + b + d;
+      }, 0),
+    [watchAssignments, assignmentBaselines],
+  );
+  const currentAvailable = order ? Math.max(0, order.total_quantity - projectedAssignedTotal) : 0;
+
+  const removeAssignmentRow = (index: number) => {
+    remove(index);
+    setAssignmentBaselines((prev) => prev.filter((_, i) => i !== index));
+  };
   const isStandardOrder = (order?.order_category ?? 'standard') === 'standard';
   /** Phiếu nhập tạp hóa đã trả tại SG — không thu lại trên đơn giao. */
   const importPaid = isStandardOrder && order?.import_orders?.payment_status === 'paid';
@@ -230,10 +246,13 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
       const existingDvs = order.delivery_vehicles || [];
       const initialAssignments: any[] = [];
+      const baselines: number[] = [];
 
       if (existingDvs.length > 0) {
         existingDvs.forEach((dv: any) => {
           const vid = dv.vehicle_id;
+          const persistedQty = Number(dv.assigned_quantity) || 0;
+          baselines.push(persistedQty);
           const rowImageUrls: string[] = [];
           if (Array.isArray(dv.image_urls)) {
             for (const u of dv.image_urls) {
@@ -250,10 +269,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             driver_id: dv.driver_id || '',
             loader_name: dv.loader_name || '',
             unit_price: defaultUnitPrice,
-            quantity: dv.assigned_quantity,
+            quantity: '',
             expected_amount: importPaidReset
               ? 0
-              : dv.expected_amount || (dv.assigned_quantity * defaultUnitPrice),
+              : dv.expected_amount || (persistedQty * defaultUnitPrice),
             image_urls: rowImageUrls,
           });
         });
@@ -266,9 +285,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
       if (initialVid && !initialAssignments.some(a => a.vehicle_id === initialVid)) {
         const vehicle = eligibleVehicles.find(v => v.id === initialVid);
-        const alreadyAssignedSum = initialAssignments.reduce((sum, a) => sum + (Number(a.quantity) || 0), 0);
+        const alreadyAssignedSum = baselines.reduce((sum, b) => sum + b, 0);
         const remainingForThis = Math.max(0, order.total_quantity - alreadyAssignedSum);
 
+        baselines.push(0);
         initialAssignments.push({
           vehicle_id: initialVid,
           driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId : ''),
@@ -281,6 +301,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       }
 
       if (initialAssignments.length === 0) {
+        baselines.push(0);
         initialAssignments.push({
           vehicle_id: isDriver ? (initialVid || '') : '',
           driver_id: isDriver ? (myEmployeeId || '') : '',
@@ -300,41 +321,6 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         });
       }
 
-      /**
-       * Một đơn thường chỉ có một dòng xe; SL trong form là TỔNG đã giao cho xe (cộng dồn).
-       * Sau lần giao một phần, form mở lại vẫn hiện SL lần trước (vd 11) trong khi «còn lại» là 11 —
-       * người dùng hay nhập thêm 11 thay vì đổi thành 22 → tổng vẫn 11, đơn không bao giờ đủ.
-       * Nếu chỉ có một dòng và toàn bộ SL đã phân nằm ở dòng đó, tự điền tổng = đã gán + còn lại của đơn.
-       */
-      if (initialAssignments.length === 1 && order.total_quantity > 0) {
-        const totalPersistedOnOrder = (order.delivery_vehicles || []).reduce(
-          (s, dv: any) => s + (Number(dv.assigned_quantity) || 0),
-          0,
-        );
-        const remainingOnOrder = Math.max(0, order.total_quantity - totalPersistedOnOrder);
-        const row = initialAssignments[0];
-        const rowQty = Number(row.quantity) || 0;
-        if (
-          remainingOnOrder > 0 &&
-          totalPersistedOnOrder > 0 &&
-          rowQty > 0 &&
-          rowQty === totalPersistedOnOrder
-        ) {
-          const newQty = rowQty + remainingOnOrder;
-          row.quantity = newQty;
-          if (importPaidReset) {
-            row.expected_amount = 0;
-          } else {
-            const prevExpected = Number(row.expected_amount) || 0;
-            if (prevExpected > 0 && rowQty > 0) {
-              row.expected_amount = Math.round((prevExpected * newQty) / rowQty);
-            } else {
-              row.expected_amount = newQty * defaultUnitPrice;
-            }
-          }
-        }
-      }
-
       if (importPaidReset) {
         initialAssignments.forEach((a) => {
           a.expected_amount = 0;
@@ -342,8 +328,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       }
 
       const existingAssignedVehicleIds = initialAssignments
-        .filter((assignment) => Number(assignment.quantity || 0) > 0)
-        .map((assignment) => assignment.vehicle_id)
+        .map((assignment, i) => {
+          const final = (baselines[i] ?? 0) + (Number(assignment.quantity) || 0);
+          return final > 0 ? assignment.vehicle_id : null;
+        })
         .filter(Boolean);
 
       const paidVehicleIds = new Set(
@@ -399,6 +387,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         }
       }
 
+      setAssignmentBaselines(baselines);
       reset({
         assignments: initialAssignments,
         image_urls: formGlobalImageUrls,
@@ -411,9 +400,30 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
   const onSubmit = async (data: FormValues) => {
     if (!order) return;
+    if (assignmentBaselines.length !== data.assignments.length) {
+      toast.error('Lỗi đồng bộ form. Đóng hộp thoại và mở lại.');
+      return;
+    }
     try {
+      const sumFinal = data.assignments.reduce(
+        (s, a, i) => s + (assignmentBaselines[i] ?? 0) + (Number(a.quantity) || 0),
+        0,
+      );
+      if (sumFinal > order.total_quantity) {
+        toast.error(`Tổng SL phân cho xe (${sumFinal}) không được vượt quá SL đơn (${order.total_quantity}).`);
+        return;
+      }
+
+      for (let i = 0; i < data.assignments.length; i++) {
+        const finalQty = (assignmentBaselines[i] ?? 0) + (Number(data.assignments[i].quantity) || 0);
+        if (finalQty <= 0) {
+          toast.error('Mỗi dòng xe cần có tổng SL > 0 (đã gán trước đó + SL giao thêm).');
+          return;
+        }
+      }
+
       const normalizedAssignments = data.assignments
-        .map((assignment) => {
+        .map((assignment, index) => {
           const vehicle = eligibleVehicles.find((v) => v.id === assignment.vehicle_id);
           const resolvedDriverId =
             assignment.driver_id ||
@@ -423,14 +433,17 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
           const rawPrice = Number(assignment.unit_price) || 0;
           const normalizedPrice = rawPrice;
-          const qty = Number(assignment.quantity) || 0;
-          const normalizedAmount = qty * normalizedPrice;
+          const baseline = assignmentBaselines[index] ?? 0;
+          const delta = Number(assignment.quantity) || 0;
+          const finalQty = baseline + delta;
+          const normalizedAmount = finalQty * normalizedPrice;
           const srcImportPaid =
             (order.order_category ?? 'standard') === 'standard' &&
             order.import_orders?.payment_status === 'paid';
 
           return {
             ...assignment,
+            quantity: finalQty,
             driver_id: resolvedDriverId,
             unit_price: normalizedPrice,
             expected_amount: srcImportPaid
@@ -643,11 +656,18 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                     {/* Số lượng */}
                     <div className="w-full md:w-32 space-y-1.5 mt-2 md:mt-0">
                       <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
-                        <Package size={12} className={isPaid ? "text-green-500" : "text-primary"} /> Tổng SL xe
+                        <Package size={12} className={isPaid ? "text-green-500" : "text-primary"} /> SL giao thêm
                       </label>
-                      <p className="text-[9px] text-muted-foreground leading-snug -mt-0.5">
-                        Cộng dồn mọi lần giao (vd đã 11, giao nốt nhập 22).
-                      </p>
+                      {(assignmentBaselines[index] ?? 0) > 0 && (
+                        <p className="text-[9px] text-muted-foreground font-semibold tabular-nums -mt-0.5">
+                          Đã gán: {(assignmentBaselines[index] ?? 0).toLocaleString()} — nhập phần nốt (vd đơn 20, đã 10 → ghi 10).
+                        </p>
+                      )}
+                      {(assignmentBaselines[index] ?? 0) === 0 && (
+                        <p className="text-[9px] text-muted-foreground leading-snug -mt-0.5">
+                          Lần đầu phân xe: nhập tổng SL cho xe (vd 20).
+                        </p>
+                      )}
                       <input
                         type="number"
                         step="any"
@@ -659,10 +679,12 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                               valStr = valStr.replace(/^0+/, '');
                               e.target.value = valStr;
                             }
-                            const val = Number(valStr) || 0;
+                            const delta = Number(valStr) || 0;
+                            const baseline = assignmentBaselines[index] ?? 0;
+                            const finalQty = baseline + delta;
                             const currentUnitPrice = Number(watchAssignments[index]?.unit_price) || 0;
                             if (!importPaid) {
-                              const expected = val * currentUnitPrice;
+                              const expected = finalQty * currentUnitPrice;
                               setValue(`assignments.${index}.expected_amount`, expected, { shouldValidate: true });
                             }
                           }
@@ -688,9 +710,11 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                             onChange={(vnd) => {
                               if (isRowDisabled) return;
                               field.onChange(vnd);
-                              const qty = Number(watchAssignments[index]?.quantity) || 0;
+                              const delta = Number(watchAssignments[index]?.quantity) || 0;
+                              const baseline = assignmentBaselines[index] ?? 0;
+                              const finalQty = baseline + delta;
                               if (!importPaid) {
-                                const expected = qty * vnd;
+                                const expected = finalQty * vnd;
                                 setValue(`assignments.${index}.expected_amount`, expected, { shouldValidate: true });
                               }
                             }}
@@ -830,7 +854,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                     {fields.length > 1 && !isRowDisabled && (
                       <button
                         type="button"
-                        onClick={() => remove(index)}
+                        onClick={() => removeAssignmentRow(index)}
                         className="absolute -top-2 -right-2 md:static md:w-10 md:h-10.5 flex items-center justify-center bg-card md:bg-transparent text-red-400 hover:text-red-500 hover:bg-red-50 border border-red-100 md:border-transparent rounded-full md:rounded-lg shadow-sm md:shadow-none transition-all"
                         title="Xóa xe này"
                       >
@@ -842,10 +866,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               })}
             </div>
 
-            {order?.total_quantity && totalAssignedQuantity > order.total_quantity && (
+            {order?.total_quantity && projectedAssignedTotal > order.total_quantity && (
               <div className="p-3 rounded-xl bg-amber-50 border border-amber-100 flex items-start gap-2 text-amber-700 mt-4">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                <p className="text-[12px] font-medium italic">Tổng số lượng đã phân ({totalAssignedQuantity.toLocaleString()}) đang vượt quá yêu cầu của đơn hàng ({order.total_quantity.toLocaleString()}).</p>
+                <p className="text-[12px] font-medium italic">Tổng số lượng đã phân ({projectedAssignedTotal.toLocaleString()}) đang vượt quá yêu cầu của đơn hàng ({order.total_quantity.toLocaleString()}).</p>
               </div>
             )}
 

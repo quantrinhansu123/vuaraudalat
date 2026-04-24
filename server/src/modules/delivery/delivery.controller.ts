@@ -11,6 +11,8 @@ const deliveryOrderSchema = z.object({
   import_cost: z.number().optional(),
   order_category: z.enum(['standard', 'vegetable']).optional().default('standard'),
   delivery_date: z.string().optional(),
+  /** HH:mm (24h), optional */
+  delivery_time: z.string().optional().nullable(),
   vehicles: z.array(z.object({
     vehicle_id: z.string().uuid(),
     driver_id: z.string().uuid(),
@@ -30,6 +32,7 @@ const deliveryOrderUpdateSchema = z.object({
   unit_price: z.number().optional(),
   import_cost: z.number().optional(),
   delivery_date: z.string().optional(),
+  delivery_time: z.string().optional().nullable(),
   image_url: z.string().optional().nullable(),
   image_urls: z.array(z.string()).optional().nullable(),
 });

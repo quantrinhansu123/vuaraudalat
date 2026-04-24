@@ -10,6 +10,7 @@ import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
+import { deliveryTimeToInputValue } from '../../lib/deliveryDisplay';
 
 const getDisplayProductName = (order: DeliveryOrder) =>
   order.product_name.includes(' - ') ? order.product_name.split(' - ').slice(1).join(' - ') : order.product_name;
@@ -224,7 +225,7 @@ const PrintDeliveryPage: React.FC = () => {
               <table className="print-table">
                 <thead>
                   <tr className="print-header-repeat">
-                    <th colSpan={3} className="text-left">
+                    <th colSpan={4} className="text-left">
                       <div className="text-[16px] font-bold">Ngày giao: {new Date(date).toLocaleDateString('vi-VN')}</div>
                     </th>
                     <th colSpan={eligibleVehicles.length || 10} className="text-right">
@@ -234,6 +235,7 @@ const PrintDeliveryPage: React.FC = () => {
                   <tr>
                     <th className="col-name text-left border border-black align-middle">Tên Khách</th>
                     <th className="col-qty border border-black align-middle text-center">SL</th>
+                    <th className="border border-black align-middle text-center text-[10px] whitespace-nowrap">Giờ giao</th>
                     <th className="col-product text-left border border-black align-middle">Hàng</th>
                     {eligibleVehicles.map(v => (
                       <th key={v.id} className="text-center border border-black text-[10px] whitespace-nowrap tracking-tighter uppercase">
@@ -250,6 +252,7 @@ const PrintDeliveryPage: React.FC = () => {
                     <tr key={o.id}>
                       <td className="text-left font-medium border border-black">{getReceiverDisplayName(o)}</td>
                       <td className="text-center font-bold border border-black">{o.total_quantity || ''}</td>
+                      <td className="text-center border border-black tabular-nums">{deliveryTimeToInputValue(o.delivery_time) || ''}</td>
                       <td className="text-left border border-black">{getDisplayProductName(o)}</td>
                       {eligibleVehicles.map(v => {
                         const dv = (o.delivery_vehicles || []).find(deliveryVehicle => deliveryVehicle.vehicle_id === v.id);

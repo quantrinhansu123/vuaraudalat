@@ -291,6 +291,8 @@ export interface DeliveryOrder {
   order_category?: 'standard' | 'vegetable';
   status: DeliveryStatus;
   delivery_date?: string;
+  /** Giờ giao (TIME → API thường trả "HH:mm:ss") */
+  delivery_time?: string | null;
   export_order_payment_status?: PaymentStatus;
   created_at: string;
   updated_at: string;

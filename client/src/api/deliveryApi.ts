@@ -25,6 +25,7 @@ export const deliveryApi = {
     payment_method?: string;
     order_category?: 'standard' | 'vegetable';
     delivery_date?: string;
+    delivery_time?: string | null;
     vehicles?: Array<{
       vehicle_id: string;
       driver_id: string;

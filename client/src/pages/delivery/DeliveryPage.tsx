@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
+import { formatNgayGioGiaoVI } from '../../lib/deliveryDisplay';
 import type { DeliveryOrder, DeliveryStatus, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -719,6 +720,7 @@ const DeliveryPage: React.FC = () => {
                     )}
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-24 border-r border-border">Thao tác</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Loại</th>
+                    <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-32 border-r border-border whitespace-nowrap">Ngày giờ giao</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-20 border-r border-border">Người nhận</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Hàng</th>
@@ -747,7 +749,7 @@ const DeliveryPage: React.FC = () => {
                     <React.Fragment key={date}>
                       {/* Date separator row */}
                       <tr className="bg-muted/80 dark:bg-muted/40 border-y border-border shadow-sm overflow-hidden">
-                        <td colSpan={(isAdmin ? 11 : 10) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2.5">    
+                        <td colSpan={(isAdmin ? 12 : 11) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2.5">    
                           <div className="flex items-center gap-2">
                             {isAdmin && (
                               <input
@@ -888,6 +890,9 @@ const DeliveryPage: React.FC = () => {
                                   <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-muted text-muted-foreground uppercase">Cũ</span>
                                 )}
                               </div>
+                            </td>
+                            <td className="px-2 py-3 border-r border-border text-center text-[12px] text-muted-foreground tabular-nums whitespace-nowrap">
+                              {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}
                             </td>
                             <td className="px-4 py-3 text-[12px] font-bold text-foreground border-r border-border">
                               {getReceiverDisplayName(o)}
@@ -1130,12 +1135,17 @@ const DeliveryPage: React.FC = () => {
     
                                 {/* Row 2: Order code + Quantity */}
                                 <div className="flex justify-between items-center">
-                                  <div className="flex items-center gap-1.5 text-[12px]">
-                                    {o.delivery_date === anchorStr ? (
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 uppercase">Mới</span>
-                                    ) : (
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-muted text-muted-foreground uppercase">Cũ</span>
-                                    )}
+                                  <div className="flex flex-col gap-0.5 text-[12px] min-w-0">
+                                    <div className="flex items-center gap-1.5">
+                                      {o.delivery_date === anchorStr ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 uppercase shrink-0">Mới</span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-muted text-muted-foreground uppercase shrink-0">Cũ</span>
+                                      )}
+                                    </div>
+                                    <span className="text-[11px] text-muted-foreground tabular-nums truncate" title={formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}>
+                                      {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}
+                                    </span>
                                   </div>
     
                                   <div className="flex items-center gap-2 shrink-0">

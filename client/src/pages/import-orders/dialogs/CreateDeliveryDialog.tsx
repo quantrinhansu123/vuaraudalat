@@ -17,6 +17,7 @@ const deliverySchema = z.object({
   product_name: z.string().min(1, 'Vui lòng nhập tên sản phẩm'),
   total_quantity: z.coerce.number().min(1, 'Số lượng tối thiểu là 1'),
   delivery_date: z.string().min(1, 'Vui lòng chọn ngày giao'),
+  delivery_time: z.string().optional(),
   unit_price: z.coerce.number().optional(),
   import_cost: z.coerce.number().optional(),
   payment_method: z.string().optional(),
@@ -49,6 +50,7 @@ interface DeliveryFormData {
   product_name: string;
   total_quantity: number;
   delivery_date: string;
+  delivery_time?: string;
   unit_price?: number;
   import_cost?: number;
   payment_method?: string;
@@ -94,6 +96,7 @@ const CreateDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, importOrder,
         product_name: (firstItem?.products?.name || firstItem?.package_type) || 'Kiện',
         total_quantity: firstItem?.quantity || importOrder.quantity || 0,
         delivery_date: format(new Date(), 'yyyy-MM-dd'),
+        delivery_time: '',
         import_cost: firstItem?.unit_price || importOrder.unit_price || 0,
         unit_price: firstItem?.unit_price || importOrder.unit_price || 0,
         payment_method: 'Tiền mặt',
@@ -104,7 +107,11 @@ const CreateDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, importOrder,
 
   const onSubmit: SubmitHandler<DeliveryFormData> = async (data) => {
     try {
-      await createMutation.mutateAsync(data);
+      const delivery_time = (data.delivery_time || '').trim();
+      await createMutation.mutateAsync({
+        ...data,
+        delivery_time: delivery_time || undefined,
+      });
       onClose();
       navigate('/hang-hoa/giao-hang');
     } catch {
@@ -151,6 +158,31 @@ const CreateDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, importOrder,
 
         {/* Scrollable Body */}
         <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-bold text-foreground">Ngày giao</label>
+                <input
+                  type="date"
+                  {...register('delivery_date')}
+                  className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all"
+                />
+                {errors.delivery_date && (
+                  <p className="text-red-500 text-[11px] font-bold">{errors.delivery_date.message}</p>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-bold text-foreground">Giờ giao</label>
+                <input
+                  type="time"
+                  step={60}
+                  {...register('delivery_time')}
+                  className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all tabular-nums"
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="bg-card rounded-2xl border border-border shadow-sm p-5 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-orange-600">

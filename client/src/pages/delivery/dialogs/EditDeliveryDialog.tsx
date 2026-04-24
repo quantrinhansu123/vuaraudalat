@@ -12,6 +12,7 @@ import { CreatableSearchableSelect } from '../../../components/ui/CreatableSearc
 import { SearchableSelect } from '../../../components/ui/SearchableSelect';
 import VnUnitPriceInput from '../../../components/shared/VnUnitPriceInput';
 import type { DeliveryOrder, Product } from '../../../types';
+import { deliveryTimeToInputValue } from '../../../lib/deliveryDisplay';
 import toast from 'react-hot-toast';
 
 interface Props {
@@ -70,6 +71,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
     total_quantity: 0,
     unit_price: 0,
     delivery_date: '',
+    delivery_time: '',
     sender_id: null as string | null,
     sender_name: '',
     customer_id: null as string | null,
@@ -116,6 +118,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
         total_quantity: order.total_quantity || 0,
         unit_price: uPrice || 0,
         delivery_date: order.delivery_date || '',
+        delivery_time: deliveryTimeToInputValue(order.delivery_time),
         sender_id: order.import_orders?.sender_id || order.vegetable_orders?.sender_id || null,
         sender_name: order.import_orders?.sender_name || order.vegetable_orders?.sender_name || order.import_orders?.sender_customers?.name || order.vegetable_orders?.sender_customers?.name || '',
         customer_id: order.import_orders?.customer_id || order.vegetable_orders?.customer_id || null,
@@ -183,9 +186,14 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
 
       if (formData.total_quantity !== order.total_quantity) payload.total_quantity = Number(formData.total_quantity);
       const rawPrice = Number(formData.unit_price) || 0;
-      const normalizedPrice = rawPrice > 0 && rawPrice < 10000 ? rawPrice * 1000 : rawPrice;
+      const normalizedPrice = rawPrice;
       if (normalizedPrice !== order.unit_price) payload.unit_price = normalizedPrice;
       if (formData.delivery_date && formData.delivery_date !== order.delivery_date) payload.delivery_date = formData.delivery_date;
+      const prevTime = deliveryTimeToInputValue(order.delivery_time);
+      const nextTime = (formData.delivery_time || '').trim();
+      if (nextTime !== prevTime) {
+        payload.delivery_time = nextTime || null;
+      }
       
       const currentImageUrls = formData.image_urls || [];
       const oldImageUrls = (order as any).image_urls || [];
@@ -425,15 +433,28 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-[13px] font-bold text-foreground">Ngày giao</label>
-              <input
-                type="date"
-                className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
-                value={formData.delivery_date}
-                onChange={e => setFormData({ ...formData, delivery_date: e.target.value })}
-                disabled={isSubmitting}
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-bold text-foreground">Ngày giao</label>
+                <input
+                  type="date"
+                  className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
+                  value={formData.delivery_date}
+                  onChange={e => setFormData({ ...formData, delivery_date: e.target.value })}
+                  disabled={isSubmitting}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-bold text-foreground">Giờ giao</label>
+                <input
+                  type="time"
+                  step={60}
+                  className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50 tabular-nums"
+                  value={formData.delivery_time}
+                  onChange={(e) => setFormData({ ...formData, delivery_time: e.target.value })}
+                  disabled={isSubmitting}
+                />
+              </div>
             </div>
 
             {isDaGiao && (

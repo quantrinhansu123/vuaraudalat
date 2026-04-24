@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { useVehicleAssignments, useVehicleCheckins } from '../../../hooks/queries/useVehicles';
 import type { Vehicle } from '../../../types';
 import LoadingSkeleton from '../../../components/shared/LoadingSkeleton';
+import { formatNgayGioGiaoVI } from '../../../lib/deliveryDisplay';
 
 interface Props {
   vehicle: Vehicle | null;
@@ -141,9 +142,11 @@ const VehicleDetailsDialog: React.FC<Props> = ({ vehicle, isOpen, isClosing, onC
                       <div className="flex items-start gap-2">
                         <MapPin size={14} className="mt-0.5 text-muted-foreground" />
                         <div className="min-w-0">
-                          <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1">Ngày giao</p>
-                          <p className="text-[13px] text-foreground font-semibold truncate">
-                            {assignment.delivery_orders?.delivery_date || 'Hôm nay'}
+                          <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest leading-none mb-1">Ngày giờ giao</p>
+                          <p className="text-[13px] text-foreground font-semibold truncate" title={assignment.delivery_orders?.delivery_date ? formatNgayGioGiaoVI(assignment.delivery_orders.delivery_date, assignment.delivery_orders.delivery_time) : undefined}>
+                            {assignment.delivery_orders?.delivery_date
+                              ? formatNgayGioGiaoVI(assignment.delivery_orders.delivery_date, assignment.delivery_orders.delivery_time)
+                              : 'Hôm nay'}
                           </p>
                         </div>
                       </div>

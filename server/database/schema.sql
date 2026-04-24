@@ -183,6 +183,7 @@ CREATE TABLE public.delivery_orders (
   order_category VARCHAR(50) DEFAULT 'standard' CHECK (order_category IN ('standard','vegetable')),
   status VARCHAR(30) DEFAULT 'hang_o_sg' CHECK (status IN ('hang_o_sg','can_giao','da_giao')),
   delivery_date DATE,
+  delivery_time TIME WITHOUT TIME ZONE,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

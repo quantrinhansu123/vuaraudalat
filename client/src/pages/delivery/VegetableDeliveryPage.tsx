@@ -22,6 +22,7 @@ import { Filter, X } from 'lucide-react';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
+import { formatNgayGioGiaoVI } from '../../lib/deliveryDisplay';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -572,6 +573,7 @@ const VegetableDeliveryPage: React.FC = () => {
                     )}
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-24 border-r border-border">Thao tác</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Loại</th>
+                    <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border">Ngày giờ giao</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-20 border-r border-border">Tên vựa / chủ</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Hàng</th>
                     <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-17.5 border-r border-border">Trạng thái</th>
@@ -599,7 +601,7 @@ const VegetableDeliveryPage: React.FC = () => {
                     <React.Fragment key={date}>
                       {/* Date separator row */}
                       <tr className="bg-muted/80 dark:bg-muted/40 border-y border-border shadow-sm overflow-hidden">
-                        <td colSpan={(isAdmin ? 10 : 9) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2.5">
+                        <td colSpan={(isAdmin ? 11 : 10) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             {isAdmin && (() => {
                               const dateOrders = Object.values(groupedOrders[date]).flat();
@@ -640,7 +642,7 @@ const VegetableDeliveryPage: React.FC = () => {
                       {Object.entries(groupedOrders[date]).map(([supplierName, ordersBySupplier]) => (
                         <React.Fragment key={`${date}-${supplierName}`}>
                           <tr className="bg-primary/5 border-y border-primary/10">
-                            <td colSpan={(isAdmin ? 10 : 9) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2">
+                            <td colSpan={(isAdmin ? 11 : 10) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2">
                               <span className="text-[12px] font-bold text-primary uppercase tracking-wider">Vựa: {supplierName}</span>
                             </td>
                           </tr>
@@ -737,6 +739,9 @@ const VegetableDeliveryPage: React.FC = () => {
                                   <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-muted text-muted-foreground uppercase">Cũ</span>
                                 )}
                               </div>
+                            </td>
+                            <td className="px-2 py-3 border-r border-border text-center text-[12px] text-muted-foreground tabular-nums whitespace-nowrap">
+                              {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}
                             </td>
                             <td className="px-4 py-3 text-[12px] font-bold text-foreground border-r border-border">
                               {getSenderName(o)}
@@ -938,13 +943,18 @@ const VegetableDeliveryPage: React.FC = () => {
                               </span>
                             </div>
 
-                            {/* Row 2: Supplier + Quantity */}
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground truncate pr-2">
-                                <Store size={13} className="text-muted-foreground/60 shrink-0" />
-                                <span className="font-semibold text-foreground truncate">
-                                  {getSenderName(o)}
+                            {/* Row 2: Ngày giờ giao + Supplier + Quantity */}
+                            <div className="flex justify-between items-center gap-2">
+                              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                <span className="text-[11px] text-muted-foreground tabular-nums truncate" title={formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}>
+                                  {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time)}
                                 </span>
+                                <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground truncate">
+                                  <Store size={13} className="text-muted-foreground/60 shrink-0" />
+                                  <span className="font-semibold text-foreground truncate">
+                                    {getSenderName(o)}
+                                  </span>
+                                </div>
                               </div>
 
                               <div className="flex items-center gap-2 shrink-0">

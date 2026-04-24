@@ -12,6 +12,15 @@ import {
 } from '../../utils/goodsScope';
 
 export class DeliveryService {
+  /** TIME / chuỗi từ DB → "HH:mm" cho phiếu xuất */
+  private static formatDeliveryTimeHHmm(raw: unknown): string | null {
+    if (raw == null || raw === '') return null;
+    const s = String(raw);
+    const m = s.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return `${m[1].padStart(2, '0')}:${m[2]}`;
+  }
+
   /** Chỉ đánh dấu đã giao khi đã phân đủ số lượng; còn hàng thì can_giao. */
   private static resolveDeliveryStatusFromAssignedQuantity(
     totalQuantity: unknown,
@@ -41,12 +50,14 @@ export class DeliveryService {
     const { data: deliveryOrder, error: deliveryError } = await supabaseService
       .from('delivery_orders')
       .select(
-        'id, product_name, unit_price, delivery_date, order_category, import_order_id, vegetable_order_id, image_url, image_urls, total_quantity'
+        'id, product_name, unit_price, delivery_date, delivery_time, order_category, import_order_id, vegetable_order_id, image_url, image_urls, total_quantity'
       )
       .eq('id', deliveryId)
       .single();
 
     if (deliveryError || !deliveryOrder) throw deliveryError || new Error('Không tìm thấy đơn giao hàng');
+
+    const exportTimeFromDelivery = DeliveryService.formatDeliveryTimeHHmm((deliveryOrder as any).delivery_time);
 
     // Chỉ đồng bộ phiếu xuất cho hàng tạp hóa (standard) từ trang DeliveryPage.
     if (deliveryOrder.order_category && deliveryOrder.order_category !== 'standard') {
@@ -105,7 +116,10 @@ export class DeliveryService {
 
       const updatePayload: Record<string, any> = {
         export_date: exportDate,
-        export_time: existingExportOrder.export_time || format(new Date(), 'HH:mm'),
+        export_time:
+          exportTimeFromDelivery ||
+          existingExportOrder.export_time ||
+          format(new Date(), 'HH:mm'),
         product_name: deliveryOrder.product_name,
         quantity: safeQuantity,
         debt_amount: debtAmount,
@@ -142,7 +156,7 @@ export class DeliveryService {
 
     const createPayload: Record<string, any> = {
       export_date: exportDate,
-      export_time: format(new Date(), 'HH:mm'),
+      export_time: exportTimeFromDelivery || format(new Date(), 'HH:mm'),
       product_id: deliveryId,
       product_name: deliveryOrder.product_name,
       quantity: safeQuantity,
@@ -252,15 +266,19 @@ export class DeliveryService {
 
   static async create(deliveryData: any, userId?: string) {
     const { vehicles, ...orderData } = deliveryData;
+    const insertRow: any = {
+      ...orderData,
+      order_category: orderData.order_category || 'standard',
+      status: vehicles && vehicles.length > 0 ? 'can_giao' : 'hang_o_sg',
+    };
+    if (insertRow.delivery_time === '' || insertRow.delivery_time == null) {
+      delete insertRow.delivery_time;
+    }
 
     // 1. Create the delivery order
     const { data: order, error } = await supabaseService
       .from('delivery_orders')
-      .insert({
-        ...orderData,
-        order_category: orderData.order_category || 'standard',
-        status: (vehicles && vehicles.length > 0) ? 'can_giao' : 'hang_o_sg'
-      })
+      .insert(insertRow)
       .select()
       .single();
 
@@ -671,9 +689,13 @@ export class DeliveryService {
   }
 
   static async update(id: string, updateData: any) {
+    const payload = { ...updateData };
+    if (Object.prototype.hasOwnProperty.call(payload, 'delivery_time') && payload.delivery_time === '') {
+      payload.delivery_time = null;
+    }
     const { data, error } = await supabaseService
       .from('delivery_orders')
-      .update(updateData)
+      .update(payload)
       .eq('id', id)
       .select()
       .single();
